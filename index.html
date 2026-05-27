@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIBot - Classic Web Edition</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .chat-container {
+            width: 100%;
+            max-width: 600px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+        }
+        .header {
+            background: linear-gradient(to right, #2563eb, #3b82f6);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+        .header button {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .header button:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .chat-box {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            background: #f9fafb;
+        }
+        .message {
+            margin-bottom: 1rem;
+            display: flex;
+        }
+        .message.user {
+            justify-content: flex-end;
+        }
+        .message-content {
+            max-width: 75%;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        .message.user .message-content {
+            background: #3b82f6;
+            color: white;
+            border-bottom-right-radius: 0;
+        }
+        .message.model .message-content {
+            background: white;
+            color: #1f2937;
+            border: 1px solid #e5e7eb;
+            border-bottom-left-radius: 0;
+        }
+        .input-area {
+            padding: 1rem;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 0.5rem;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            outline: none;
+            font-size: 1rem;
+        }
+        .input-area input:focus {
+            border-color: #3b82f6;
+        }
+        .input-area button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        .input-area button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .loading {
+            display: none;
+            margin-bottom: 1rem;
+        }
+        .loading span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #9ca3af;
+            border-radius: 50%;
+            margin-right: 4px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .loading span:nth-child(1) { animation-delay: -0.32s; }
+        .loading span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="header">
+        <h1>AIBot Classic</h1>
+        <button onclick="clearHistory()">Clear Chat</button>
+    </div>
+    
+    <div class="chat-box" id="chatBox">
+        <!-- Messages will be injected here -->
+    </div>
+    
+    <div class="loading" id="loadingIndicator">
+        <span></span><span></span><span></span>
+    </div>
+
+    <div class="input-area">
+        <input type="text" id="userInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+        <button id="sendBtn" onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script>
+    const chatBox = document.getElementById('chatBox');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+
+    async function fetchHistory() {
+        try {
+            const res = await fetch('/api/history');
+            const data = await res.json();
+            chatBox.innerHTML = '';
+            data.forEach(msg => addMessageToUI(msg.role, msg.content));
+        } catch (e) {
+            console.error('Error fetching history:', e);
+        }
+    }
+
+    function addMessageToUI(role, content) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${role}`;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        
+        // Simple line break replacement
+        contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+        
+        msgDiv.appendChild(contentDiv);
+        chatBox.appendChild(msgDiv);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendMessage() {
+        const text = userInput.value.trim();
+        if (!text) return;
+
+        userInput.value = '';
+        sendBtn.disabled = true;
+        
+        addMessageToUI('user', text);
+        loadingIndicator.style.display = 'block';
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text })
+            });
+            const data = await res.json();
+            
+            if (res.ok) {
+                addMessageToUI('model', data.content);
+            } else {
+                addMessageToUI('model', `Error: ${data.detail || 'Failed to get response'}`);
+            }
+        } catch (e) {
+            addMessageToUI('model', 'Network error. Make sure the backend is running.');
+        } finally {
+            sendBtn.disabled = false;
+            loadingIndicator.style.display = 'none';
+        }
+    }
+
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') {
+            sendMessage();
+        }
+    }
+
+    async function clearHistory() {
+        if (!confirm('Are you sure you want to clear the chat?')) return;
+        await fetch('/api/history', { method: 'DELETE' });
+        chatBox.innerHTML = '';
+    }
+
+    // Load history on startup
+    fetchHistory();
+</script>
+
+</body>
+</html>
